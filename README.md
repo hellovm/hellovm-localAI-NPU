@@ -173,38 +173,31 @@ transformers==4.57.1
 
 <div align="center">
   <a href="https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html" title="OpenVINO" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/intel.svg" height="28" alt="OpenVINO" />
-    <span> OpenVINO</span>
+    <img src="web/static/logos/intel.svg" height="90" alt="OpenVINO" />
   </a>
   ·
   <a href="https://github.com/openvinotoolkit/openvino.genai" title="OpenVINO GenAI" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/openvino-genai.svg" height="28" alt="OpenVINO GenAI" />
-    <span> OpenVINO GenAI</span>
+    <img src="web/static/logos/openvino-genai.svg" height="90" alt="OpenVINO GenAI" />
   </a>
   ·
   <a href="https://huggingface.co/docs/optimum/main/en/intel/openvino" title="Optimum-Intel" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/optimum-intel.svg" height="28" alt="Optimum-Intel" />
-    <span> Optimum-Intel</span>
+    <img src="web/static/logos/optimum-intel.svg" height="90" alt="Optimum-Intel" />
   </a>
   ·
   <a href="https://modelscope.cn" title="ModelScope" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/modelscope.svg" height="28" alt="ModelScope" />
-    <span> ModelScope</span>
+    <img src="web/static/logos/modelscope.svg" height="90" alt="ModelScope" />
   </a>
   ·
   <a href="https://huggingface.co/docs/transformers/index" title="Transformers" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/transformers.svg" height="28" alt="Transformers" />
-    <span> Transformers</span>
+    <img src="web/static/logos/transformers.svg" height="90" alt="Transformers" />
   </a>
   ·
   <a href="https://flask.palletsprojects.com" title="Flask" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/flask.svg" height="28" alt="Flask" />
-    <span> Flask</span>
+    <img src="web/static/logos/flask.svg" height="90" alt="Flask" />
   </a>
   ·
   <a href="https://www.python.org/" title="Python" style="margin:6px;display:inline-block">
-    <img src="web/static/logos/python.svg" height="28" alt="Python" />
-    <span> Python</span>
+    <img src="web/static/logos/python.svg" height="90" alt="Python" />
   </a>
 </div>
 
