@@ -11,11 +11,12 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from backend.services.system import get_info
 from backend.services.models import list_models, delete_model, models_root
-from backend.services.inference import load_pipeline, generate, quantize_model
+from backend.services.inference import load_pipeline, generate, quantize_model, is_model_in_use, release_model, is_model_loaded
 from backend.utils.tasks import task_store
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 MODELS_DIR = models_root(BASE_DIR)
+PERF = {"lat": {"CPU": [], "GPU": [], "NPU": [], "NVIDIA": []}, "last": None, "warn": None}
 
 app = APIFlask(
     __name__,
@@ -38,6 +39,16 @@ def api_system_info():
 @app.get("/api/models/list")
 def api_models_list():
     return jsonify({"items": list_models(BASE_DIR)})
+
+@app.get("/api/models/is_loaded")
+def api_models_is_loaded():
+    model_id = request.args.get("model_id")
+    device = request.args.get("device", "CPU")
+    if not model_id:
+        return jsonify({"error": "model_id required"}), 400
+    model_dir = MODELS_DIR / model_id.replace("/", "__")
+    ok = is_model_loaded(model_dir, device)
+    return jsonify({"loaded": bool(ok)})
 
 def _get_cache_dir():
     import os
@@ -103,7 +114,7 @@ def _run_modelscope_download(task_id, model_id, local_dir, include=None, exclude
                     return
             try:
                 from modelscope import snapshot_download
-                task_store.update(task_id, message="api")
+                task_store.update(task_id, message="api_download")
                 def _run_api():
                     p = snapshot_download(model_id, cache_dir=str(cache_dir), revision=revision)
                     src = Path(p)
@@ -176,6 +187,15 @@ def api_models_quantize():
         task_store.update(task_id, status="running", message="quantizing")
         try:
             result = quantize_model(src, out, mode)
+            try:
+                release_model(src)
+            except Exception:
+                pass
+            try:
+                import shutil
+                shutil.rmtree(src)
+            except Exception:
+                pass
             task_store.complete(task_id, result=result)
         except Exception as e:
             task_store.update(task_id, status="error", error=str(e))
@@ -189,8 +209,34 @@ def api_models_delete():
     model_id = data.get("model_id")
     if not model_id:
         return jsonify({"error": "model_id required"}), 400
-    ok = delete_model(BASE_DIR, model_id.replace("/", "__"))
-    return jsonify({"ok": ok})
+    target = MODELS_DIR / model_id.replace("/", "__")
+    if is_model_in_use(target):
+        return jsonify({
+            "error_code": "model_in_use",
+            "friendly": True,
+            "message": "模型正在使用，无法删除。请先释放模型后再删除。",
+            "action": "release_then_delete"
+        }), 409
+    try:
+        ok = delete_model(BASE_DIR, model_id.replace("/", "__"))
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({
+            "error_code": "delete_failed",
+            "friendly": True,
+            "message": "删除失败，可能由于文件占用。请释放模型后重试。",
+            "detail": str(e)
+        }), 409
+
+@app.post("/api/models/release")
+def api_models_release():
+    data = request.get_json(force=True)
+    model_id = data.get("model_id")
+    if not model_id:
+        return jsonify({"error": "model_id required"}), 400
+    target = MODELS_DIR / model_id.replace("/", "__")
+    release_model(target)
+    return jsonify({"ok": True})
 
 @app.post("/api/infer/chat")
 def api_infer_chat():
@@ -205,11 +251,65 @@ def api_infer_chat():
     if not model_dir.exists():
         return jsonify({"error": "model_not_found"}), 404
     try:
-        pipe = load_pipeline(model_dir, device)
+        import time
+        t0 = time.time()
+        pipe = load_pipeline(model_dir, device, config)
         output = generate(pipe, prompt, config)
+        dt = int((time.time() - t0) * 1000)
+        key = device if device in PERF["lat"] else ("NPU" if "NPU" in device else ("GPU" if "GPU" in device else ("CPU" if "CPU" in device else None)))
+        arr = PERF["lat"].get(key)
+        if arr is not None:
+            arr.append(dt)
+            if len(arr) > 30:
+                del arr[:len(arr)-30]
+        PERF["last"] = {"device": device, "latency_ms": dt}
+        cpu_avg = sum(PERF["lat"]["CPU"]) / len(PERF["lat"]["CPU"]) if PERF["lat"]["CPU"] else None
+        npu_avg = sum(PERF["lat"]["NPU"]) / len(PERF["lat"]["NPU"]) if PERF["lat"]["NPU"] else None
+        PERF["warn"] = None
+        if (device == "NPU" or ("NPU" in device)) and cpu_avg is not None and npu_avg is not None and npu_avg > cpu_avg * 1.2:
+            PERF["warn"] = "npu_slower_than_cpu"
         return jsonify({"output": output})
     except Exception as e:
+        msg = str(e)
+        if device in ("NPU", "GPU") and ("Could not find a model" in msg or "Jenkins" in msg or "not supported" in msg):
+            return jsonify({
+                "error_code": "incompatible_acceleration",
+                "friendly": True,
+                "message": "当前模型不支持硬件加速功能，建议：1) 更换为兼容模型 2) 使用CPU模式运行",
+                "docs_link": "https://github.com/openvinotoolkit/openvino.genai",
+                "recommended": [
+                    "qwen/Qwen2.5-0.5B-Instruct",
+                    "qwen/Qwen2.5-1.5B-Instruct",
+                    "qwen/Qwen2.5-3B-Instruct"
+                ],
+                "device": device
+            }), 200
+        return jsonify({"error": msg}), 500
+
+@app.post("/api/infer/preload")
+def api_infer_preload():
+    data = request.get_json(force=True)
+    model_id = data.get("model_id")
+    device = data.get("device", "CPU")
+    if not model_id:
+        return jsonify({"error": "model_id required"}), 400
+    model_dir = MODELS_DIR / model_id.replace("/", "__")
+    if not model_dir.exists():
+        return jsonify({"error": "model_not_found"}), 404
+    try:
+        _ = load_pipeline(model_dir, device, data.get("config", {}))
+        return jsonify({"ok": True})
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.get("/api/perf")
+def api_perf():
+    def avg(a):
+        return int(sum(a)/len(a)) if a else None
+    return jsonify({
+        "avg": {k: avg(v) for k, v in PERF["lat"].items()},
+        "last": PERF["last"],
+        "warn": PERF["warn"]
+    })
 
 def run():
     app.run(host="127.0.0.1", port=8000)

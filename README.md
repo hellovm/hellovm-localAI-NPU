@@ -5,23 +5,60 @@
 Local AI Q&A platform powered by OpenVINO, optimized for Intel Ultra NPU. | 基于 OpenVINO 的本地 AI 问答平台，针对 Intel Ultra 系列 NPU 优化。
 
 <p>
-📦 Version: <b>V0.0.1 Dev</b> · 🗓️ Release Date: <b>2025-11-19</b>
+📦 Version: <b>V0.0.2 Dev</b> · 🗓️ Release Date: <b>2025-11-20</b>
 </p>
 
 </div>
 
 ## Highlights / 亮点
 
-- ⚡ One-click `Download + INT8 Quantization` 按钮，开箱即用
-- ⬇️ ModelScope 官方下载（带实时进度）
-- 📊 进度条：不定进度 → 精确百分比动态切换
-- 🧩 INT8 / INT4 权重量化，极大降低内存占用
-- 🖥️ 加速器选择：CPU · Intel GPU · Intel Ultra NPU · NVIDIA GPU
-- 🧠 Intel Ultra NPU 专项优化：酷睿 Ultra 系列低功耗高并发，对中小模型推理更高效
-- 🌐 中英双语 UI，📱 响应式现代界面
-- 🚀 一键启动 `start.bat`，无需 Node.js
-- 🗂️ 项目内缓存：`tmp/`（可用 `AIFUNLAND_CACHE_DIR` 定制）
+- ⚡ 一键“下载 + INT8量化”，开箱即用
+- ⬇️ ModelScope 下载：实时进度（不定进度→精确百分比），友好文案替换“API”
+- 🧩 INT8/INT4 权重量化，量化完成自动清理原始模型，仅保留量化版本；Tokenizer IR 自动编译
+- 🖥️ 加速器选择：CPU · Intel GPU · Intel Ultra NPU · NVIDIA · 协同选项（NPU+GPU、NPU+GPU+CPU）
+- 🎯 默认优先 Intel NPU+GPU 协同；首次加载自动预热，启用编译缓存（`OV_CACHE_DIR`），缩短 TTFT
+- 🧠 Intel Ultra NPU 优化：`OV_PERFORMANCE_HINT=LATENCY`、可调并行度 `streams`，低延迟优先
+- 🛡️ 友好错误提示：不兼容加速器与模型占用删除，前端弹窗与“释放模型”按钮
+- 💬 现代化 UI（Material 风格）：消息气泡与历史搜索、Tooltip/配置向导、三档响应式布局
+- 📈 性能面板与告警：`/api/perf` 监控延迟；NPU 低于 CPU 自动提示；系统信息“当前加速器”不重复显示
+- 🚀 一键启动 `start.bat`，无需 Node.js；项目缓存：`tmp/`（可用 `AIFUNLAND_CACHE_DIR` 定制）
 - 🧱 模块化架构，预留扩展接口（文生图/视频等）
+
+## Release Notes · V0.0.2 Dev（2025/11/20）
+
+### 1) 错误提示优化
+- 模型加载失败提示优化：当检测到模型不兼容 Intel NPU/GPU 加速时，前端显示友好信息：
+  - “当前模型不支持硬件加速功能，请更换兼容模型或使用 CPU 模式”
+- 模型删除失败提示优化：当模型被占用时显示：
+  - “模型正在使用中，请先停止相关任务后再尝试删除”
+
+### 2) 交互体验改进
+- 首次加载等待提示：
+  - “系统正在初始化模型，这可能需要 1-2 分钟，请稍候...”
+- 实时下载进度：
+  - 准确反映后端下载状态，避免仅显示“API”，支持不定进度到精确百分比的切换
+
+### 3) 硬件加速优化
+- 加速器选择优先级更新：
+  - 1) Intel NPU → 2) Intel GPU → 3) CPU → 4) Nvidia GPU
+- 多硬件协同加速模式：
+  - 提供 NPU+GPU+CPU 与 NPU+GPU 混合计算选项，提升硬件利用率
+- NPU 推理效率优化：
+  - 量化参数与并行度配置优化，优先低延迟模式（可调 `Latency/Throughput` 与 `streams`）
+
+### 4) 性能优化
+- NPU 推理效率专项优化，缩短响应时间与首帧时间（TTFT）
+- 前端界面响应速度优化与动画反馈统一，提升整体体验
+
+版本状态：开发版（Dev）
+
+---
+
+### Previous Releases / 历史版本
+
+<p>
+📦 Version: <b>V0.0.1 Dev</b> · 🗓️ Release Date: <b>2025-11-19</b>
+</p>
 
 ## Quick Start（Windows）
 

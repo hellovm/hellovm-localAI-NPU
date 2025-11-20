@@ -2,7 +2,7 @@ from pathlib import Path
 
 _pipe_cache = {}
 
-def load_pipeline(model_dir: Path, device: str):
+def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
     import openvino_genai as ov_genai
     # ensure tokenizer IR exists in model_dir; if missing, try to convert from HF tokenizer
     tok_xml = model_dir / "openvino_tokenizer.xml"
@@ -24,12 +24,105 @@ def load_pipeline(model_dir: Path, device: str):
             ov.save_model(ov_detok, str(model_dir / "openvino_detokenizer.xml"))
         except Exception:
             pass
+    import os
+    if device == "NPU" or ("NPU" in device):
+        os.environ.setdefault("OV_NUM_STREAMS", "1")
+    # enable compile cache to reduce first-time latency
+    try:
+        from pathlib import Path as _P
+        _cd = _P.cwd() / "tmp" / "ov_cache"
+        _cd.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("OV_CACHE_DIR", str(_cd))
+    except Exception:
+        pass
+    import os
+    # apply device-specific performance hints
+    perf_mode = None
+    if config:
+        perf_mode = config.get("perf_mode")
+    if device == "NPU" or ("NPU" in device):
+        streams = None
+        if config:
+            streams = config.get("npu_streams")
+        if streams:
+            os.environ["OV_NUM_STREAMS"] = str(streams)
+        else:
+            os.environ.setdefault("OV_NUM_STREAMS", "1" if perf_mode in (None, "LATENCY") else "2")
+        if perf_mode in ("LATENCY", "THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
+            os.environ["OV_PERFORMANCE_HINT"] = perf_mode
+        else:
+            os.environ.setdefault("OV_PERFORMANCE_HINT", "LATENCY")
+        try:
+            ov_mode = "latency" if perf_mode in (None, "LATENCY") else "efficiency"
+            os.environ.setdefault("NPU_COMPILATION_MODE_PARAMS", f"optimization-level=2 performance-hint-override={ov_mode}")
+            os.environ.setdefault("NPU_TURBO", "YES")
+            os.environ.setdefault("NPU_COMPILER_DYNAMIC_QUANTIZATION", "YES")
+        except Exception:
+            pass
+    elif device == "GPU" or ("GPU" in device):
+        streams = None
+        if config:
+            streams = config.get("gpu_streams")
+        if streams:
+            os.environ["OV_NUM_STREAMS"] = str(streams)
+        else:
+            os.environ.setdefault("OV_NUM_STREAMS", "1" if perf_mode in (None, "LATENCY") else "2")
+        if perf_mode in ("LATENCY", "THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
+            os.environ["OV_PERFORMANCE_HINT"] = perf_mode
+    elif device == "CPU" or ("CPU" in device):
+        try:
+            nt = os.cpu_count() or 4
+            os.environ.setdefault("OV_INFERENCE_NUM_THREADS", str(max(2, nt // 2)))
+        except Exception:
+            pass
     key = (str(model_dir), device)
     p = _pipe_cache.get(key)
     if p is None:
-        p = ov_genai.LLMPipeline(str(model_dir), device)
+        try:
+            if device.startswith("MULTI:"):
+                devs = device.split(":",1)[1]
+                os.environ.setdefault("MULTI_DEVICE_PRIORITIES", devs)
+                if perf_mode in ("CUMULATIVE_THROUGHPUT", "THROUGHPUT"):
+                    os.environ.setdefault("OV_PERFORMANCE_HINT", perf_mode)
+                p = ov_genai.LLMPipeline(str(model_dir), f"MULTI:{devs}")
+            else:
+                p = ov_genai.LLMPipeline(str(model_dir), device)
+        except Exception:
+            fallback = None
+            if "NPU" in device:
+                fallback = "NPU"
+            elif "GPU" in device:
+                fallback = "GPU"
+            elif "CPU" in device:
+                fallback = "CPU"
+            else:
+                fallback = device
+            p = ov_genai.LLMPipeline(str(model_dir), fallback)
         _pipe_cache[key] = p
     return p
+
+def is_model_in_use(model_dir: Path) -> bool:
+    s = str(model_dir)
+    for (md, _dev), _p in list(_pipe_cache.items()):
+        if md == s:
+            return True
+    return False
+
+def release_model(model_dir: Path):
+    s = str(model_dir)
+    for k in list(_pipe_cache.keys()):
+        if k[0] == s:
+            try:
+                _pipe_cache[k] = None
+            except Exception:
+                pass
+            try:
+                del _pipe_cache[k]
+            except Exception:
+                pass
+
+def is_model_loaded(model_dir: Path, device: str) -> bool:
+    return _pipe_cache.get((str(model_dir), device)) is not None
 
 def generate(pipe, prompt: str, config: dict):
     if config:

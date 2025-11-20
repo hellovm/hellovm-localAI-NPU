@@ -31,14 +31,26 @@ def get_info():
     devices = _openvino_devices()
     nvidia = _nvidia_info()
     accelerators = []
-    if "CPU" in devices:
-        accelerators.append({"id": "CPU", "label": "CPU"})
-    if any(d.startswith("GPU") for d in devices):
-        accelerators.append({"id": "GPU", "label": "Intel GPU"})
-    if any(d.startswith("NPU") for d in devices):
+    has_npu = any(d.startswith("NPU") for d in devices)
+    has_gpu = any(d.startswith("GPU") for d in devices)
+    has_cpu = "CPU" in devices
+    if has_npu:
         accelerators.append({"id": "NPU", "label": "Intel NPU"})
+    if has_gpu:
+        accelerators.append({"id": "GPU", "label": "Intel GPU"})
+    if has_cpu:
+        accelerators.append({"id": "CPU", "label": "CPU"})
     if nvidia:
         accelerators.append({"id": "NVIDIA", "label": "NVIDIA GPU"})
+    # cooperative acceleration options
+    combos = []
+    if has_npu and has_gpu:
+        combos.append({"id": "MULTI:NPU,GPU", "label": "Intel NPU+GPU (协同)"})
+    if has_npu and has_cpu:
+        combos.append({"id": "MULTI:NPU,CPU", "label": "Intel NPU+CPU (协同)"})
+    if has_npu and has_gpu and has_cpu:
+        combos.append({"id": "MULTI:NPU,GPU,CPU", "label": "Intel NPU+GPU+CPU (协同)"})
+    accelerators = combos + accelerators
     return {
         "os": platform.system(),
         "os_version": platform.version(),
