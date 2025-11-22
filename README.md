@@ -12,22 +12,22 @@
 
 ## Highlights / 亮点
 
-- ⚡ 一键“下载 + INT8量化”，开箱即用
-- ⬇️ ModelScope 下载：实时进度（不定进度→精确百分比），友好文案替换“API”
-- 🧩 INT8/INT4 权重量化，量化完成自动清理原始模型，仅保留量化版本；Tokenizer IR 自动编译
-- 🖥️ 加速器选择：CPU · Intel GPU · Intel Ultra NPU · NVIDIA · 协同选项（NPU+GPU、NPU+GPU+CPU）
-- 🎯 默认优先 Intel NPU+GPU 协同；首次加载自动预热，启用编译缓存（`OV_CACHE_DIR`），缩短 TTFT
-- 🧠 Intel Ultra NPU 优化：自动性能提示（Latency/Throughput/CumulativeThroughput），可调并行度 `streams`
-- 🛡️ 友好错误提示：不兼容加速器与模型占用删除，前端弹窗与“释放模型”按钮
-- 🎛️ 高级设置面板：`streams/tiles/num_requests`，实时保存与重置
-- 💬 分屏聊天布局：40% 输入 / 60% 结果，独立滚动与拖拽分隔
-- 🧠 Thinking 卡片：折叠/展开、摘要与复制
-- 🎨 现代化 UI（Material Design 3 + 动态色彩）：消息气泡、历史搜索、配置向导、响应式布局
-- 📈 性能面板与告警：`/api/perf` 监控延迟，展示 TTFT/TPOT/Throughput；系统信息显示库版本
-- 🚀 一键启动 `start.bat`，无需 Node.js；项目缓存：`tmp/`（可用 `AIFUNLAND_CACHE_DIR` 定制）
-- 🧱 模块化架构，预留扩展接口（文生图/视频等）
- - 💬 微信式自然聊天体验：SSE 流式分片输出、消息自动滚动到底部
- - 🧾 富文本排版：支持 Markdown 标题/列表/链接/代码块，提升可读性
+- ⚡ 一键“下载 + INT8量化”，开箱即用 (One-click "Download + INT8 quantization", ready to use)
+- ⬇️ ModelScope 下载：实时进度（不定进度→精确百分比），友好文案替换“API” (ModelScope download with real-time progress and friendly messages)
+- 🧩 INT8/INT4 权重量化，量化完成自动清理原始模型，仅保留量化版本；Tokenizer IR 自动编译 (INT8/INT4 weight-only quantization; delete original after quantization; auto-compile tokenizer IR)
+- 🖥️ 加速器选择：CPU · Intel GPU · Intel Ultra NPU · NVIDIA · 协同选项（NPU+GPU、NPU+GPU+CPU） (Accelerators: CPU/Intel GPU/Intel Ultra NPU/NVIDIA; NPU+GPU/NPU+GPU+CPU)
+- 🎯 默认优先 Intel NPU+GPU 协同；首次加载自动预热，启用编译缓存（`OV_CACHE_DIR`），缩短 TTFT (Prefer NPU+GPU; warm-up and compile cache to reduce TTFT)
+- 🧠 Intel Ultra NPU 优化：自动性能提示（Latency/Throughput/CumulativeThroughput），可调并行度 `streams` (Performance hints and adjustable streams for NPU)
+- 🛡️ 友好错误提示：不兼容加速器与模型占用删除，前端弹窗与“释放模型”按钮 (Friendly errors and safe release)
+- 🎛️ 高级设置面板：`streams/tiles/num_requests`，实时保存与重置 (Advanced settings with persistence)
+- 💬 分屏聊天布局：40% 输入 / 60% 结果，独立滚动与拖拽分隔 (Split chat layout; independent scroll)
+- 🧠 Thinking 卡片：折叠/展开、摘要与复制 (Thinking card: toggle and copy)
+- 🎨 现代化 UI（Material Design 3 + 动态色彩）：消息气泡、历史搜索、配置向导、响应式布局 (Modern UI with Material Design 3 and dynamic colors)
+- 📈 性能面板与告警：`/api/perf` 监控延迟，展示 TTFT/TPOT/Throughput；系统信息显示库版本 (Performance panel: TTFT/TPOT/Throughput; library versions)
+- 🚀 一键启动 `start.bat`，无需 Node.js；项目缓存：`tmp/`（可用 `AIFUNLAND_CACHE_DIR` 定制） (One-click start; project cache)
+- 🧱 模块化架构，预留扩展接口（文生图/视频等） (Modular architecture; T2I/video extensibility)
+- 💬 微信式自然聊天体验：SSE 流式分片输出、消息自动滚动到底部 (SSE streaming; auto-scroll)
+- 🧾 富文本排版：支持 Markdown 标题/列表/链接/代码块，提升可读性 (Rich Markdown formatting)
 
 ## Why NPU Acceleration / 为什么要支持 NPU 加速
 
@@ -46,41 +46,22 @@
 
 ## Release Notes · V0.0.4 Dev（2025/11/22）
 
-### 更新摘要（中文）
-- 缓存热加载：首次启动平台需加载模型并编译缓存，后续启动自动加载缓存，缩短从启动到可用的等待时间
-- 优化 HETERO 逻辑：提升多硬件（NPU+GPU/CPU）协同效率，默认优先 Intel NPU+GPU，并启用管线并行
-- 已知问题修复：修复 INT8 IR 权重文件缺失导致加载失败、默认设备选择被覆盖等问题
-- 文本生成图片（Text-to-Image）后端开发：完成基础后端能力，前端暂未开放入口
-- Web 页面交互优化：支持 SSE 流式回答；增强上下文理解与思考/最终答案拆分
-- 新增 Pipeline Parallelism 支持：在异构设备上启用管线并行以降低尾时延
-- 修正 Thinking 过程不显示的问题：折叠/展开与复制逻辑完善
-
-### Release Summary (English)
-- Cache warm loading: compile and cache models on first launch; subsequent starts auto-load cache to reduce readiness time
-- HETERO logic optimization: better multi-device coordination; default prefer Intel NPU+GPU with pipeline parallelism
-- Bug fixes: address missing INT8 IR bin causing load failure; fix default device selection being overwritten
-- Text-to-Image backend: initial backend implemented (frontend UI not exposed yet)
-- Web UX improvements: streaming SSE answers; enhanced context understanding and think/final split
-- Add support of Pipeline Parallelism on heterogeneous devices
-- Fix issue where Thinking content was not displayed properly
+- 缓存热加载：首次启动平台需加载模型并编译缓存，后续启动自动加载缓存，缩短从启动到可用的等待时间 (Cache warm loading to reduce readiness time)
+- 优化 HETERO 逻辑：提升多硬件（NPU+GPU/CPU）协同效率，默认优先 Intel NPU+GPU，并启用管线并行 (Optimize HETERO logic; prefer NPU+GPU with pipeline parallelism)
+- 已知问题修复：修复 INT8 IR 权重文件缺失导致加载失败、默认设备选择被覆盖等问题 (Fix missing INT8 IR bin and default device override issues)
+- 文本生成图片（Text-to-Image）后端开发：完成基础后端能力，前端暂未开放入口 (Text-to-Image backend ready; UI initially hidden)
+- Web 页面交互优化：支持 SSE 流式回答；增强上下文理解与思考/最终答案拆分 (Web UX: streaming SSE and improved context with think/final split)
+- 新增 Pipeline Parallelism 支持：在异构设备上启用管线并行以降低尾时延 (Add pipeline parallelism on heterogeneous devices)
+- 修正 Thinking 过程不显示的问题：折叠/展开与复制逻辑完善 (Fix display of Thinking block with better toggle/copy)
 
 ## Release Notes · V0.0.3 Dev（2025/11/21）
 
-### 更新摘要（中文）
-- 继续优化 NPU 推理效率：调整 NPU 并发与性能提示，降低 TTFT 与提升吞吐
-- 优化前端页面：更友好的错误提示与交互，细节打磨（SSE、分屏、提示文案）
-- 增加 HETERO 集成：实现多硬件协同推理（NPU + iGPU/CPU），自动优选 iGPU，排除 NVIDIA 错用
-- 增加 DeepThink、联网搜索与上下文理解：支持 `<think>/<final>` 拆分、Web 搜索增强与上下文重组
-- 优化模型量化流程：INT8 量化完成后自动删除原始模型，仅保留量化版本；自动编译 Tokenizer IR
-- 修复多硬件协同模式下可能错误调用 NVIDIA 独立显卡的问题
-
-### Release Summary (English)
-- Further optimize NPU inference efficiency: tune concurrency and performance hints to reduce TTFT and improve throughput
-- User-friendly frontend: better error messages and interactions; refined SSE, split view and copy/summary UX
-- HETERO integration: multi-device cooperative inference (NPU + iGPU/CPU); auto-select Intel iGPU and exclude NVIDIA misuse
-- DeepThink, Web search, and context awareness: `<think>/<final>` separation, web-augmented responses, and prompt reconstruction
-- Streamlined quantization flow: delete original model after INT8 W8 quantization; auto compile tokenizer IR
-- Fix potential misuse of NVIDIA dGPU in multi-device cooperative mode
+- 继续优化 NPU 推理效率：调整并发与性能提示，降低 TTFT 与提升吞吐 (Optimize NPU efficiency to reduce TTFT and improve throughput)
+- 优化前端页面：更友好的错误提示与交互，细节打磨（SSE、分屏、提示文案） (Frontend improvements: better errors and refined SSE/split UX)
+- 增加 HETERO 集成：实现多硬件协同推理（NPU + iGPU/CPU），自动优选 iGPU，排除 NVIDIA 错用 (Add HETERO integration: NPU+iGPU/CPU; auto-select iGPU)
+- 增加 DeepThink、联网搜索与上下文理解：支持 `<think>/<final>` 拆分、Web 搜索增强与上下文重组 (DeepThink, web search, and context awareness)
+- 优化模型量化流程：INT8 完成后删除原始模型，仅保留量化版本；自动编译 Tokenizer IR (Streamlined INT8 quantization and tokenizer IR)
+- 修复多硬件协同模式下可能错误调用 NVIDIA 独立显卡的问题 (Fix potential misuse of NVIDIA dGPU)
 
 ## Release Notes · V0.0.2 Dev（2025/11/20）
 
@@ -130,32 +111,23 @@
 
 ## Quick Start（Windows）
 
-1. 双击 `start.bat`
-   - 自动安装/检查嵌入式 Python 与依赖
-   - 启动后端并打开浏览器 `http://127.0.0.1:8000/`
-2. 在 “Models” 输入框使用默认模型：`qwen/Qwen2.5-0.5B-Instruct`
-3. 点击 “Download” 或 “Download+INT8” 一键体验
-4. 在 “Chat” 区选择模型，输入问题，点击 “Send/发送”
+1. 双击 `start.bat` (Double-click `start.bat`)
+   - 自动安装/检查嵌入式 Python 与依赖 (Auto-install/check embedded Python and deps)
+   - 启动后端并打开浏览器 `http://127.0.0.1:8000/` (Start backend and open browser)
+2. 在 “Models” 输入框使用默认模型：`qwen/Qwen2.5-0.5B-Instruct` (Use the default model in the Models input)
+3. 点击 “Download” 或 “Download+INT8” 一键体验 (Click Download or Download+INT8)
+4. 在 “Chat” 区选择模型，输入问题，点击 “Send/发送” (Select model, enter your question, click Send)
 
-Tips：如需自定义缓存目录，设置环境变量 `AIFUNLAND_CACHE_DIR`（默认 `d:\codes\AI Funland\tmp`）。
+Tips：如需自定义缓存目录，设置环境变量 `AIFUNLAND_CACHE_DIR`（默认 `d:\codes\AI Funland\tmp`） (Set `AIFUNLAND_CACHE_DIR` to customize cache directory)
 
-## Features（English）
+## Features / 功能
 
-- Model selection, chat UI, bilingual interface
-- Model management: download (ModelScope), quantize (INT8/INT4), delete
-- Hardware info and accelerator selection: CPU, Intel GPU, Intel Ultra NPU, NVIDIA GPU
-- Responsive, modern UI; no Node.js required; one-click `start.bat`
-- Project-scoped cache (`tmp/`), robust download with retries and API fallback
- - Streaming output (SSE) with natural chat, markdown rendering, auto-scroll
-
-## 功能（中文）
-
-- 模型选择与对话，中英双语界面
-- 模型管理：ModelScope 下载、INT8/INT4 量化、删除
-- 系统硬件信息与加速器选择：CPU / Intel GPU / Intel NPU / NVIDIA GPU
-- 响应式现代化 UI；无需 Node.js；一键 `start.bat`
-- 项目级缓存（`tmp/`）；下载重试与 API 回退，稳健可靠
- - 流式输出（SSE）与自然聊天；支持 Markdown 富文本排版与自动滚动
+- 模型选择与对话，中英双语界面 (Model selection and chat with bilingual UI)
+- 模型管理：ModelScope 下载、INT8/INT4 量化、删除 (Model management: download, INT8/INT4 quantization, delete)
+- 硬件信息与加速器选择：CPU / Intel GPU / Intel NPU / NVIDIA GPU (Hardware info and accelerator selection)
+- 响应式现代化 UI；无需 Node.js；一键 `start.bat` (Responsive modern UI; no Node.js; one-click start)
+- 项目级缓存（`tmp/`）；下载重试与 API 回退，稳健可靠 (Project cache; robust retries and API fallback)
+- 流式输出（SSE）与自然聊天；支持 Markdown 富文本排版与自动滚动 (Streaming SSE with Markdown and auto-scroll)
 
 ## Architecture / 架构
 
@@ -173,14 +145,14 @@ Tips：如需自定义缓存目录，设置环境变量 `AIFUNLAND_CACHE_DIR`（
 
 ## Recommended Models / 推荐模型
 
-- `qwen/Qwen2.5-0.5B-Instruct` · 适合 CPU 快速验证；建议先 INT8
-- `qwen/Qwen2.5-1.5B-Instruct` · 更优质量；适合 CPU/Intel NPU/Intel GPU/NVIDIA GPU（量化后）
-- `qwen/Qwen2.5-3B-Instruct` · 中端显卡/核显可用；注意显存与 IR 分片
+- `qwen/Qwen2.5-0.5B-Instruct` · 适合 CPU 快速验证；建议先 INT8 (Good for quick CPU validation; try INT8 first)
+- `qwen/Qwen2.5-1.5B-Instruct` · 更优质量；适合 CPU/Intel NPU/Intel GPU/NVIDIA GPU（量化后） (Better quality; suitable for CPU/NPU/GPU after quantization)
+- `qwen/Qwen2.5-3B-Instruct` · 中端显卡/核显可用；注意显存与 IR 分片 (Usable on mid-tier GPUs/iGPU; check memory and IR sharding)
 
 ## Directories / 目录约定
 
-- `models/` · 下载与量化后模型：`<org__model>`、`<org__model>_quant_int8`
-- `tmp/` · ModelScope 缓存（可用 `AIFUNLAND_CACHE_DIR` 自定义）
+- `models/` · 下载与量化后模型：`<org__model>`、`<org__model>_quant_int8` (Downloaded and quantized models)
+- `tmp/` · ModelScope 缓存（可用 `AIFUNLAND_CACHE_DIR` 自定义） (ModelScope cache with customizable path)
 
 ## Dependencies / 依赖
 
