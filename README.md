@@ -2,10 +2,10 @@
 
 <h1>AI Funland 🎡🤖</h1>
 
-<h2>Local AI Q&A platform powered by OpenVINO, optimized for Intel Ultra NPU. | 基于 OpenVINO 的本地 AI 问答平台，针对 Intel Ultra 系列 NPU 优化。</h2>
+<h2>Local Multi Function platform powered by OpenVINO, optimized for Intel Ultra NPU,supports Text Q&A and Text2Image, more features coming soon. | 基于 OpenVINO 的本地 AI 多能力平台，支持文本问答和文本生成图片，更多功能即将上线，针对 Intel Ultra 系列 NPU 优化。</h2>
 
 <p>
-📦 Version: <b>V0.0.4 Dev</b> · 🗓️ Release Date: <b>2025-11-22</b>
+📦 Version: <b>V0.1.0 Dev</b> · 🗓️ Release Date: <b>2025-11-24</b>
 </p>
 
 </div>
@@ -43,6 +43,13 @@
 - 更好的电池续航：在移动设备上以更低能耗完成推理，延长工作时长。
 
 适用场景示例：本地问答助手、快速摘要/检索增强生成（RAG）终端、移动办公与演示、教育与科研设备、需要合规/隐私保护的行业应用等。
+
+## Release Notes · V0.1.0 Dev（2025/11/24）
+
+- 功能开发 (Feature development)
+- 初步实现文本生成图片 (Initial Text-to-Image implementation)
+- 已知 bug 修复与优化 (Known bug fixes and optimizations)
+- 前端页面重新设计与优化 (Frontend redesign and optimization)
 
 ## Release Notes · V0.0.4 Dev（2025/11/22）
 
@@ -128,6 +135,31 @@ Tips：如需自定义缓存目录，设置环境变量 `AIFUNLAND_CACHE_DIR`（
 - 响应式现代化 UI；无需 Node.js；一键 `start.bat` (Responsive modern UI; no Node.js; one-click start)
 - 项目级缓存（`tmp/`）；下载重试与 API 回退，稳健可靠 (Project cache; robust retries and API fallback)
 - 流式输出（SSE）与自然聊天；支持 Markdown 富文本排版与自动滚动 (Streaming SSE with Markdown and auto-scroll)
+
+## Text-to-Image（文生图）
+
+- 概述
+- 基于 OpenVINO GenAI 的 Diffusers 管线，支持 `TextEncoder/UNet/VAE` 分设备选择与缓存预热，默认在 CPU 可用，推荐在 Intel NPU/GPU 使用以获得更好吞吐。
+- 入口与界面
+- 顶部导航选择 `文生图` 页面；卡片 `预置模型推荐` 下拉分组：
+  - `已下载`：本地已存在的模型目录（`org__model` 或已转换的 `_ov_fp16/_ov_int8` 兼容项）
+  - `推荐下载`：常用 Stable Diffusion 模型清单（如 `stabilityai/stable-diffusion-2-1`、`runwayml/stable-diffusion-v1-5` 等）
+- 下载与转换
+- 选择“推荐下载”中的模型后，点击 `ModelScope下载并转换FP16` 或 `ModelScope下载并转换INT8`，系统将自动下载并使用 Optimum-Intel(OpenVINO) 进行转换；任务完成后下拉列表自动刷新，并将模型路径填入输入框。
+- 生成参数与设备
+- 在 `文本生成图片` 卡片中设置 `宽度/高度/步数/Guidance`；可为 `TextEncoder/UNet/VAE` 分别选择设备（如 `CPU/GPU/NPU`）；点击 `生成图片` 后在下方展示生成结果与状态信息。
+- 推荐模型（T2I）
+- `stabilityai/stable-diffusion-2-1` · 通用质量好；
+- `runwayml/stable-diffusion-v1-5` · 1.5 经典版本；
+- `dreamlike-art/dreamlike-anime-1.0` · 动漫风格；
+- 注意事项
+- 模型目录选择：无需手动指向 `_ov_fp16/_ov_int8` 子目录，选择原始目录（如 `sd__stabilityai__stable-diffusion-2-1`）即可；系统会自动兼容结构并避免 `model_index.json` 缺失问题。
+- 若“已下载”为空，将显示“推荐下载”分组以便一键获取；下载完成后自动填充路径。
+- 首次生成可能较慢，页面顶部横幅与居中遮罩会显示“系统初始化中，请稍候…”。
+- 相关 API
+- `/api/models/list` · 加载本地模型清单（用于“已下载”分组）
+- `/api/image/ms_download_and_convert` · ModelScope 下载并进行 OpenVINO 转换（FP16/INT8）
+- `/api/image/generate` · 文生图生成
 
 ## Architecture / 架构
 

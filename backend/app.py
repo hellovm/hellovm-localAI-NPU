@@ -3,6 +3,7 @@ import threading
 import subprocess
 import shlex
 import shutil
+import os
 from pathlib import Path
 from apiflask import APIFlask
 from flask import request, jsonify, send_from_directory
@@ -264,6 +265,77 @@ def _os_environ(cache_dir: Path = None):
     env["MODELSCOPE_CACHE"] = str(cache_dir)
     env["MS_CACHE_HOME"] = str(cache_dir)
     return env
+
+def _run_modelscope_t2i_download_and_convert(task_id: str, model_id: str, precision: str):
+    try:
+        cache_dir = _get_cache_dir()
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        raw_dir = MODELS_DIR / model_id.replace("/", "__")
+        env = _os_environ(cache_dir)
+        exe = str((Path(sys.executable).parent / "Scripts" / "modelscope.exe"))
+        pyexe = str(sys.executable)
+        use_exe = Path(exe).exists()
+        cmd = ([exe] if use_exe else [pyexe, "-m", "modelscope"]) + ["download", "--model", model_id, "--local_dir", str(raw_dir)]
+        task_store.update(task_id, status="running", progress=1, message="download")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(BASE_DIR), env=env)
+        pct = 3
+        for line in proc.stdout:
+            s = (line or "").strip()
+            if not s:
+                continue
+            task_store.update(task_id, message=s)
+            pct = min(60, pct + (2 if pct < 40 else 1))
+            task_store.update(task_id, progress=pct)
+        code = proc.wait()
+        if code != 0:
+            try:
+                from modelscope import snapshot_download
+                task_store.update(task_id, message="api_download")
+                p = snapshot_download(model_id, cache_dir=str(cache_dir))
+                src = Path(p)
+                if raw_dir.exists():
+                    shutil.rmtree(raw_dir)
+                shutil.move(str(src), str(raw_dir))
+            except Exception as e2:
+                task_store.update(task_id, status="error", error=str(e2))
+                return
+        task_store.update(task_id, message="convert")
+        task_store.update(task_id, progress=65)
+        try:
+            exe2 = sys.executable
+            env2 = _os_environ(cache_dir)
+            cmd2 = [exe2, "-m", "optimum.exporters.openvino.convert", "--model", str(raw_dir), "--output", str(raw_dir), "--trust-remote-code", "--weight-format", ("int8" if precision == "int8" else "fp16")]
+            proc2 = subprocess.Popen(cmd2, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(BASE_DIR), env=env2)
+            pct2 = 70
+            for line2 in proc2.stdout:
+                s2 = (line2 or "").strip()
+                if not s2:
+                    continue
+                task_store.update(task_id, message=s2)
+                pct2 = min(95, pct2 + (2 if pct2 < 85 else 1))
+                task_store.update(task_id, progress=pct2)
+            code2 = proc2.wait()
+            if code2 != 0:
+                task_store.update(task_id, status="error", error="convert_failed")
+                return
+        except Exception as e3:
+            task_store.update(task_id, status="error", error=str(e3))
+            return
+        task_store.complete(task_id, result=str(raw_dir))
+    except Exception as e:
+        task_store.update(task_id, status="error", error=str(e))
+
+@app.post("/api/image/ms_download_and_convert")
+def api_image_ms_download_and_convert():
+    data = request.get_json(force=True)
+    model_id = data.get("model_id")
+    precision = str(data.get("precision") or "fp16").lower()
+    if not model_id:
+        return jsonify({"error": "model_id required"}), 400
+    task_id = task_store.create("t2i_ms_export")
+    t = threading.Thread(target=_run_modelscope_t2i_download_and_convert, args=(task_id, model_id, precision), daemon=True)
+    t.start()
+    return jsonify({"task_id": task_id})
 
 @app.post("/api/models/download")
 def api_models_download():
@@ -537,6 +609,125 @@ def api_infer_preload():
     t = threading.Thread(target=_bg, daemon=True)
     t.start()
     return jsonify({"ok": True, "async": True})
+def _encode_bmp(arr):
+    import numpy as np, struct
+    h = int(arr.shape[0])
+    w = int(arr.shape[1])
+    if arr.shape[-1] != 3:
+        raise ValueError("unsupported_channels")
+    bgr = arr.astype('uint8')[:, :, ::-1]
+    row_size = ((24 * w + 31) // 32) * 4
+    pad = row_size - w * 3
+    buf = bytearray()
+    for y in range(h):
+        buf.extend(bgr[y].tobytes())
+        if pad:
+            buf.extend(b"\x00" * pad)
+    pixel_bytes = bytes(buf)
+    file_size = 14 + 40 + len(pixel_bytes)
+    header = bytearray()
+    header.extend(b"BM")
+    header.extend(struct.pack('<IHHI', file_size, 0, 0, 14 + 40))
+    header.extend(struct.pack('<IiiHHIIiiII', 40, w, -h, 1, 24, 0, len(pixel_bytes), 0, 0, 0, 0))
+    return bytes(header) + pixel_bytes
+@app.post("/api/image/generate")
+def api_image_generate():
+    data = request.get_json(force=True)
+    model_path = data.get("model_path")
+    device = data.get("device")
+    prompt = data.get("prompt")
+    width = int(data.get("width") or 512)
+    height = int(data.get("height") or 512)
+    steps = int(data.get("steps") or 30)
+    guidance = float(data.get("guidance_scale") or 7.5)
+    # heterogeneous devices
+    te_dev = data.get("text_encoder_device")
+    unet_dev = data.get("unet_device")
+    vae_dev = data.get("vae_decoder_device") or data.get("vae_device")
+    if not model_path or not prompt:
+        return jsonify({"error": "model_path and prompt required"}), 400
+    mdir = MODELS_DIR / model_path if (model_path and ("/" not in model_path) and ("\\" not in model_path)) else Path(model_path)
+    if not mdir.exists():
+        return jsonify({"error": "model_not_found"}), 404
+    # ensure Text2ImagePipeline dir contains model_index.json; if not, try fallback to sibling raw dir
+    try:
+        idx = mdir / "model_index.json"
+        if not idx.exists():
+            name = mdir.name
+            base = None
+            for suf in ("_ov_fp16", "_ov_int8", "_ov_fp32", "_quant_int8", "_quant_int4"):
+                if name.endswith(suf):
+                    base = name[: -len(suf)]
+                    break
+            if base:
+                alt = mdir.parent / base
+                if (alt / "model_index.json").exists():
+                    mdir = alt
+    except Exception:
+        pass
+    try:
+        from backend.services.inference import load_t2i_pipeline, t2i_generate
+        devs = None
+        if te_dev or unet_dev or vae_dev:
+            devs = {"text_encoder": te_dev or "CPU", "unet": unet_dev or (te_dev or "CPU"), "vae_decoder": vae_dev or (unet_dev or te_dev or "CPU")}
+        else:
+            devs = device or "CPU"
+        props = {"CACHE_DIR": str((Path(os.environ.get("AIFUNLAND_CACHE_DIR") or (Path.cwd() / "tmp")) / "ov_cache").resolve())}
+        pipe = load_t2i_pipeline(mdir, devs, props)
+        image_tensor = t2i_generate(pipe, prompt, width=width, height=height, steps=steps, guidance_scale=guidance)
+        import base64
+        arr = getattr(image_tensor, 'data', None)
+        if arr is None:
+            return jsonify({"error": "no_image_data"}), 500
+        img = arr[0]
+        bmp = _encode_bmp(img)
+        b64 = base64.b64encode(bmp).decode('ascii')
+        return jsonify({"mime": "image/bmp", "image_b64": b64, "width": int(img.shape[1]), "height": int(img.shape[0])})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+def _slugify_model_id(mid: str) -> str:
+    return mid.replace('/', '__')
+def _run_ov_export(task_id, hf_id, out_dir, precision):
+    try:
+        exe = sys.executable
+        env = _os_environ()
+        cmd = [exe, "-m", "optimum.exporters.openvino.convert", "--model", hf_id, "--output", str(out_dir), "--trust-remote-code", "--weight-format", ("int8" if precision=="int8" else "fp16")]
+        task_store.update(task_id, status="running", progress=1, message="starting")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(BASE_DIR), env=env)
+        pct = 3
+        for line in proc.stdout:
+            s = (line or "").strip()
+            if not s:
+                continue
+            task_store.update(task_id, message=s)
+            try:
+                pct = min(95, pct + (2 if pct < 40 else (3 if pct < 75 else 1)))
+                task_store.update(task_id, progress=pct)
+            except Exception:
+                pass
+        code = proc.wait()
+        if code == 0:
+            task_store.complete(task_id, result=str(out_dir))
+        else:
+            task_store.update(task_id, status="error", error=f"exit {code}")
+    except Exception as e:
+        task_store.update(task_id, status="error", error=str(e))
+
+@app.post("/api/image/download_model")
+def api_image_download_model():
+    data = request.get_json(force=True)
+    hf_id = data.get("hf_id")
+    precision = str(data.get("precision") or "fp16").lower()
+    if not hf_id:
+        return jsonify({"error": "hf_id required"}), 400
+    slug = _slugify_model_id(hf_id)
+    out_name = f"sd__{slug}_ov_{'int8' if precision=='int8' else 'fp16'}"
+    out_dir = MODELS_DIR / out_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    task_id = task_store.create("ov_export")
+    t = threading.Thread(target=_run_ov_export, args=(task_id, hf_id, out_dir, precision), daemon=True)
+    t.start()
+    return jsonify({"task_id": task_id})
 @app.get("/api/infer/stream")
 def api_infer_stream():
     model_id = request.args.get("model_id")

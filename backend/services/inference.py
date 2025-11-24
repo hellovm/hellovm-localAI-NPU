@@ -1,9 +1,12 @@
 from pathlib import Path
 
 _pipe_cache = {}
+_t2i_cache = {}
 
 def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
     import openvino_genai as ov_genai
+    import os
+    os.environ.setdefault("OPENVINO_LOG_LEVEL", "0")
     target_dir = model_dir
     src_dir = model_dir
     try:
@@ -247,7 +250,14 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
             except Exception:
                 # fallback num_requests for unknown arch
                 os.environ.setdefault("OV_HINT_NUM_REQUESTS", "1" if ov_mode == "latency" else "4")
-            os.environ.setdefault("OV_ENABLE_PROFILING", "YES")
+            try:
+                enable_prof = False
+                if config:
+                    v = config.get("enable_profiling")
+                    enable_prof = bool(v)
+                os.environ.setdefault("OV_ENABLE_PROFILING", "YES" if enable_prof else "NO")
+            except Exception:
+                os.environ.setdefault("OV_ENABLE_PROFILING", "NO")
         except Exception:
             pass
     elif device == "GPU" or ("GPU" in device):
@@ -276,6 +286,7 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                 _base = os.environ.get("AIFUNLAND_CACHE_DIR") or str(_P.cwd() / "tmp")
                 _cd = _P(_base) / "ov_cache"
                 pipe_cfg["CACHE_DIR"] = str(_cd)
+                pipe_cfg["LOG_LEVEL"] = "LOG_NONE"
             except Exception:
                 pass
             try:
@@ -480,6 +491,85 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                 raise
         _pipe_cache[key] = p
     return p
+
+def load_t2i_pipeline(model_dir: Path, devices: dict | str, props: dict | None = None):
+    import openvino_genai as ov_genai
+    import os
+    from pathlib import Path as _P
+    os.environ.setdefault("OPENVINO_LOG_LEVEL", "0")
+    cfg = {}
+    try:
+        _base = os.environ.get("AIFUNLAND_CACHE_DIR") or str(_P.cwd() / "tmp")
+        _cd = _P(_base) / "ov_cache"
+        _cd.mkdir(parents=True, exist_ok=True)
+        cfg["CACHE_DIR"] = str(_cd)
+        cfg["PERFORMANCE_HINT"] = "LATENCY"
+        cfg["NUM_STREAMS"] = 1
+        cfg["LOG_LEVEL"] = "LOG_NONE"
+    except Exception:
+        pass
+    if props:
+        cfg.update(props)
+    if isinstance(devices, dict):
+        te = devices.get("text_encoder") or devices.get("te") or devices.get("txt") or devices.get("text") or devices.get("TEXT_ENCODER") or devices.get("TEXT")
+        un = devices.get("unet") or devices.get("UNET")
+        vd = devices.get("vae_decoder") or devices.get("vae") or devices.get("VAE_DECODER") or devices.get("VAE")
+        chosen = (str(te or "CPU"), str(un or te or "CPU"), str(vd or un or te or "CPU"))
+        key = (str(model_dir),) + chosen
+        p = _t2i_cache.get(key)
+        if p is None:
+            p = ov_genai.Text2ImagePipeline(str(model_dir))
+            tried = []
+            def attempt(dev_triplet):
+                nonlocal p
+                tried.append(dev_triplet)
+                try:
+                    p.compile(dev_triplet[0], dev_triplet[1], dev_triplet[2], config=cfg)
+                    return True
+                except Exception:
+                    return False
+            combos = [
+                chosen,
+                (chosen[0], "GPU", chosen[2] if chosen[2] != "GPU" else "CPU"),
+                (chosen[0], "CPU", chosen[2]),
+                ("CPU", "GPU", "GPU"),
+                ("CPU", "CPU", "GPU"),
+                ("CPU", "CPU", "CPU"),
+            ]
+            ok = False
+            for c in combos:
+                if attempt(c):
+                    ok = True
+                    key = (str(model_dir),) + c
+                    break
+            if not ok:
+                p = ov_genai.Text2ImagePipeline(str(model_dir), str(un or te or vd or "CPU"))
+            _t2i_cache[key] = p
+        return p
+    else:
+        dev = str(devices or "CPU")
+        key = (str(model_dir), dev)
+        p = _t2i_cache.get(key)
+        if p is None:
+            try:
+                p = ov_genai.Text2ImagePipeline(str(model_dir))
+                p.compile(dev, dev, dev, config=cfg)
+            except Exception:
+                p = ov_genai.Text2ImagePipeline(str(model_dir), dev)
+            _t2i_cache[key] = p
+        return p
+
+def t2i_generate(pipe, prompt: str, width: int | None = None, height: int | None = None, steps: int | None = None, guidance_scale: float | None = None):
+    kwargs = {}
+    if width:
+        kwargs["width"] = int(width)
+    if height:
+        kwargs["height"] = int(height)
+    if steps:
+        kwargs["num_inference_steps"] = int(steps)
+    if guidance_scale is not None:
+        kwargs["guidance_scale"] = float(guidance_scale)
+    return pipe.generate(prompt, **kwargs)
 
 def is_model_in_use(model_dir: Path) -> bool:
     s = str(model_dir)

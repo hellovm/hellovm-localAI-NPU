@@ -7,12 +7,13 @@
   <link rel="stylesheet" href="/static/styles.css">
 </head>
   <body>
-    <div id="startup_banner" class="banner hidden"><span id="startup_msg">系统初始化中，请稍候...</span></div>
+    <div id="startup_banner" class="banner hidden"><span class="spinner" aria-hidden="true"></span><span id="startup_msg">系统初始化中，请稍候...</span></div>
   <div class="app">
     <header class="topbar">
       <div class="brand">AI Funland</div>
       <nav class="nav">
         <a href="#chat" class="navlink" data-page="chat">聊天</a>
+        <a href="#t2i" class="navlink" data-page="t2i">文生图</a>
         <a href="#models" class="navlink" data-page="models">模型管理</a>
         <a href="#settings" class="navlink" data-page="settings">系统配置</a>
         <a href="#about" class="navlink" data-page="about">关于</a>
@@ -68,6 +69,48 @@
           <div class="foot" id="sys_load"></div>
         </aside>
         </div>
+      </section>
+      <section id="page_t2i" class="page">
+        <section class="card">
+          <h2>预置模型推荐</h2>
+          <div class="row">
+            <select id="t2i_preset_select" class="grow" aria-label="Preset Models"></select>
+            <button id="btn_t2i_ms_fp16">ModelScope下载并转换FP16</button>
+            <button id="btn_t2i_ms_int8">ModelScope下载并转换INT8</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>文本生成图片</h2>
+          <div class="row">
+            <input id="t2i_model_path" class="grow" placeholder="模型目录(已转换为OpenVINO)" aria-label="Model path">
+          </div>
+          <div class="row small">
+            <label>TextEncoder</label>
+            <select id="t2i_device_te" aria-label="TE Device"></select>
+            <label>UNet</label>
+            <select id="t2i_device_unet" aria-label="UNet Device"></select>
+            <label>VAE</label>
+            <select id="t2i_device_vae" aria-label="VAE Device"></select>
+          </div>
+          <div class="row small">
+            <input id="t2i_width" type="number" value="512" min="64" step="64" aria-label="Width">
+            <input id="t2i_height" type="number" value="512" min="64" step="64" aria-label="Height">
+            <input id="t2i_steps" type="number" value="30" min="1" step="1" aria-label="Steps">
+            <input id="t2i_guidance" type="number" value="7.5" step="0.1" aria-label="Guidance">
+          </div>
+          <div class="row">
+            <textarea id="t2i_prompt" rows="3" placeholder="输入提示词" aria-label="Prompt"></textarea>
+          </div>
+          <div class="row">
+            <button id="btn_t2i_generate" aria-label="Generate Image">生成图片</button>
+          </div>
+          <div class="row">
+            <div id="t2i_status"></div>
+          </div>
+          <div class="row">
+            <img id="t2i_img" alt="生成图片" style="display:none;max-width:100%;border-radius:8px" />
+          </div>
+        </section>
       </section>
         <section id="page_models" class="page">
           <section class="card">
@@ -183,7 +226,7 @@
         </section>
     </main>
     <footer class="foot">
-      <center><span>V0.0.3 Dev · 2025-11-21 · Powered by <a href="https://hellovm.com">HelloVM</a>  · <a href="https://github.com/hellovm/AI-Funland">Check on Github</a></span></center>
+      <center><span>V0.1.0 Dev · 2025-11-24 · Powered by <a href="https://hellovm.com">HelloVM</a>  · <a href="https://github.com/hellovm/AI-Funland">Check on Github</a></span></center>
     </footer>
   </div>
   <div id="loading_overlay" class="overlay hidden"><div class="box"><div class="spinner"></div><div id="loading_text">正在初始化模型，首次加载可能需要30-60秒</div><div id="loading_tip" style="display:none">模型加载中，请稍候...</div></div></div>
