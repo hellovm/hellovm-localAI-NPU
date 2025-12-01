@@ -2,6 +2,7 @@ import os
 import platform
 import subprocess
 from pathlib import Path
+from functools import lru_cache
 
 def _nvidia_info():
     try:
@@ -27,6 +28,7 @@ def _openvino_devices():
     except Exception:
         return []
 
+@lru_cache(maxsize=1)
 def _cpu_model():
     try:
         if platform.system() == "Windows":
@@ -48,6 +50,7 @@ def _cpu_model():
     except Exception:
         return platform.processor() or platform.machine()
 
+@lru_cache(maxsize=1)
 def _windows_video_controllers():
     try:
         out = subprocess.check_output(["wmic", "path", "Win32_VideoController", "get", "Name"], stderr=subprocess.STDOUT, shell=True, text=True)

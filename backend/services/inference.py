@@ -148,8 +148,11 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                     device = f"HETERO:{','.join(prio)}"
         except Exception:
             pass
+    inference_props = {}
+
     if device == "NPU" or ("NPU" in device):
-        os.environ.setdefault("OV_NUM_STREAMS", "1")
+        inference_props["NUM_STREAMS"] = "1"
+    
     import os
     # apply device-specific performance hints
     perf_mode = None
@@ -157,6 +160,7 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
         perf_mode = config.get("perf_mode")
     if (perf_mode is None) or (str(perf_mode).upper() == "AUTO"):
         perf_mode = "CUMULATIVE_THROUGHPUT"
+    
     # enforce low-latency iGPU+NPU pipeline when requested
     try:
         if config and config.get("prefill_igpu_decode_npu"):
@@ -171,34 +175,27 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
             if device.startswith("HETERO:"):
                 device = f"HETERO:{igpu},NPU"
             perf_mode = "LATENCY"
-            os.environ["OV_PERFORMANCE_HINT"] = "LATENCY"
-            os.environ["OV_NUM_STREAMS"] = "1"
-            os.environ["OV_HINT_NUM_REQUESTS"] = "1"
-            os.environ["NPU_RUN_INFERENCES_SEQUENTIALLY"] = "YES"
-            try:
-                from openvino import Core as _Core, hint as _hint
-                _c = _Core()
-                _c.set_property("HETERO", {_hint.model_distribution_policy: _hint.ModelDistributionPolicy.PIPELINE_PARALLEL})
-            except Exception:
-                try:
-                    from openvino import Core as _Core
-                    _c2 = _Core()
-                    _c2.set_property("HETERO", {"MODEL_DISTRIBUTION_POLICY": "PIPELINE_PARALLEL"})
-                except Exception:
-                    pass
+            inference_props["PERFORMANCE_HINT"] = "LATENCY"
+            inference_props["NUM_STREAMS"] = "1"
+            inference_props["NUM_REQUESTS"] = "1"
+            inference_props["NPU_RUN_INFERENCES_SEQUENTIALLY"] = "YES"
+            inference_props["MODEL_DISTRIBUTION_POLICY"] = "PIPELINE_PARALLEL"
     except Exception:
         pass
+    
     try:
         if device.startswith("HETERO:") and ("NPU" in device) and ("GPU" in device):
             if str(perf_mode).upper() != "LATENCY":
                 perf_mode = "LATENCY"
     except Exception:
         pass
+    
     try:
         if perf_mode in ("LATENCY", "THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-            os.environ["OV_PERFORMANCE_HINT"] = perf_mode
+            inference_props["PERFORMANCE_HINT"] = perf_mode
     except Exception:
         pass
+        
     if device == "NPU" or ("NPU" in device):
         streams = None
         if config:
@@ -209,26 +206,32 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
             tiles = config.get("npu_tiles")
             num_req = config.get("num_requests")
         if streams:
-            os.environ["OV_NUM_STREAMS"] = str(streams)
+            inference_props["NUM_STREAMS"] = str(streams)
         else:
-            os.environ.setdefault("OV_NUM_STREAMS", "1")
+            if "NUM_STREAMS" not in inference_props:
+                 inference_props["NUM_STREAMS"] = "1"
+        
         if perf_mode in ("LATENCY", "THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-            os.environ["OV_PERFORMANCE_HINT"] = perf_mode
+            inference_props["PERFORMANCE_HINT"] = perf_mode
         else:
-            os.environ.setdefault("OV_PERFORMANCE_HINT", "LATENCY")
+            if "PERFORMANCE_HINT" not in inference_props:
+                inference_props["PERFORMANCE_HINT"] = "LATENCY"
+        
         try:
             ov_mode = "latency" if perf_mode in (None, "LATENCY") else "efficiency"
-            os.environ.setdefault("NPU_COMPILATION_MODE_PARAMS", f"optimization-level=2 performance-hint-override={ov_mode}")
-            os.environ.setdefault("NPU_TURBO", "YES")
-            os.environ.setdefault("NPU_COMPILER_DYNAMIC_QUANTIZATION", "YES")
-            # prefer sequential in latency mode, allow concurrency in throughput mode
-            os.environ.setdefault("NPU_RUN_INFERENCES_SEQUENTIALLY", "YES" if ov_mode == "latency" else "NO")
+            inference_props["NPU_COMPILATION_MODE_PARAMS"] = f"optimization-level=2 performance-hint-override={ov_mode}"
+            inference_props["NPU_TURBO"] = "YES"
+            inference_props["NPU_COMPILER_DYNAMIC_QUANTIZATION"] = "YES"
+            inference_props["NPU_RUN_INFERENCES_SEQUENTIALLY"] = "YES" if ov_mode == "latency" else "NO"
+            
             if tiles:
-                os.environ["NPU_TILES"] = str(tiles)
+                inference_props["NPU_TILES"] = str(tiles)
             if num_req:
-                os.environ["OV_HINT_NUM_REQUESTS"] = str(num_req)
+                inference_props["NUM_REQUESTS"] = str(num_req)
             else:
-                os.environ.setdefault("OV_HINT_NUM_REQUESTS", "6")
+                if "NUM_REQUESTS" not in inference_props:
+                     inference_props["NUM_REQUESTS"] = "6"
+            
             # detect NPU architecture to set tiles and num_requests
             try:
                 from openvino import Core
@@ -236,46 +239,53 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                 arch = core.get_property("NPU", "DEVICE_ARCHITECTURE")
                 arch_s = str(arch).lower()
                 if "4000" in arch_s:
-                    os.environ.setdefault("NPU_TILES", "4")
+                    inference_props["NPU_TILES"] = "4"
                     if perf_mode in ("THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-                        os.environ.setdefault("OV_HINT_NUM_REQUESTS", "8")
+                        inference_props["NUM_REQUESTS"] = "8"
                     else:
-                        os.environ.setdefault("OV_HINT_NUM_REQUESTS", "1")
+                        inference_props["NUM_REQUESTS"] = "1"
                 else:
-                    os.environ.setdefault("NPU_TILES", "2")
+                    # default for 3720/3700
+                    inference_props["NPU_TILES"] = "2"
                     if perf_mode in ("THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-                        os.environ.setdefault("OV_HINT_NUM_REQUESTS", "4")
+                        inference_props["NUM_REQUESTS"] = "4"
                     else:
-                        os.environ.setdefault("OV_HINT_NUM_REQUESTS", "1")
+                        inference_props["NUM_REQUESTS"] = "1"
             except Exception:
                 # fallback num_requests for unknown arch
-                os.environ.setdefault("OV_HINT_NUM_REQUESTS", "1" if ov_mode == "latency" else "4")
+                if "NUM_REQUESTS" not in inference_props:
+                    inference_props["NUM_REQUESTS"] = "1" if ov_mode == "latency" else "4"
+            
             try:
                 enable_prof = False
                 if config:
                     v = config.get("enable_profiling")
                     enable_prof = bool(v)
-                os.environ.setdefault("OV_ENABLE_PROFILING", "YES" if enable_prof else "NO")
+                inference_props["ENABLE_PROFILING"] = "YES" if enable_prof else "NO"
             except Exception:
-                os.environ.setdefault("OV_ENABLE_PROFILING", "NO")
+                inference_props["ENABLE_PROFILING"] = "NO"
         except Exception:
             pass
+            
     elif device == "GPU" or ("GPU" in device):
         streams = None
         if config:
             streams = config.get("gpu_streams")
         if streams:
-            os.environ["OV_NUM_STREAMS"] = str(streams)
+            inference_props["NUM_STREAMS"] = str(streams)
         else:
-            os.environ.setdefault("OV_NUM_STREAMS", "1" if perf_mode in (None, "LATENCY") else "2")
+            if "NUM_STREAMS" not in inference_props:
+                inference_props["NUM_STREAMS"] = "1" if perf_mode in (None, "LATENCY") else "2"
         if perf_mode in ("LATENCY", "THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-            os.environ["OV_PERFORMANCE_HINT"] = perf_mode
+             inference_props["PERFORMANCE_HINT"] = perf_mode
+             
     elif device == "CPU" or ("CPU" in device):
         try:
             nt = os.cpu_count() or 4
-            os.environ.setdefault("OV_INFERENCE_NUM_THREADS", str(max(2, nt // 2)))
+            inference_props["INFERENCE_NUM_THREADS"] = str(max(2, nt // 2))
         except Exception:
             pass
+
     key = (str(model_dir), device)
     p = _pipe_cache.get(key)
     if p is None:
@@ -287,8 +297,13 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                 _cd = _P(_base) / "ov_cache"
                 pipe_cfg["CACHE_DIR"] = str(_cd)
                 pipe_cfg["LOG_LEVEL"] = "LOG_NONE"
+                pipe_cfg["ENABLE_MMAP"] = "YES"
             except Exception:
                 pass
+            
+            # Merge inference properties
+            pipe_cfg.update(inference_props)
+
             try:
                 if dev_str.startswith("HETERO:") or dev_str.startswith("MULTI:") or dev_str.startswith("AUTO:"):
                     devs = dev_str.split(":",1)[1] if (":" in dev_str) else ""
@@ -356,11 +371,6 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                     except Exception:
                         p = None
                     if p is None:
-                        try:
-                            import os as _os
-                            _os.environ.setdefault("AUTO_DEVICE_PRIORITY", devs)
-                        except Exception:
-                            pass
                         try:
                             from openvino import Core as _Core
                             _c = _Core()
@@ -439,9 +449,11 @@ def load_pipeline(model_dir: Path, device: str, config: dict | None = None):
                     except Exception:
                         devs = None
                 if devs:
-                    os.environ.setdefault("AUTO_DEVICE_PRIORITY", devs)
+                    # os.environ.setdefault("AUTO_DEVICE_PRIORITY", devs) - REMOVED
                     if perf_mode in ("THROUGHPUT", "CUMULATIVE_THROUGHPUT"):
-                        os.environ.setdefault("OV_HINT_NUM_REQUESTS", "4")
+                        # os.environ.setdefault("OV_HINT_NUM_REQUESTS", "4") - REMOVED
+                        if "NUM_REQUESTS" not in inference_props:
+                             inference_props["NUM_REQUESTS"] = "4"
                     try:
                         from openvino import Core
                         c = Core()
@@ -608,14 +620,24 @@ def generate(pipe, prompt: str, config: dict):
         if "repetition_penalty" in config:
             gen.repetition_penalty = float(config["repetition_penalty"])
         try:
-            res = pipe.generate(prompt, gen)
-        except Exception:
-            res = pipe.generate([prompt], gen)
+            try:
+                res = pipe.generate(prompt, gen)
+            except Exception:
+                res = pipe.generate([prompt], gen)
+        except RuntimeError as e:
+            if "bad allocation" in str(e):
+                raise RuntimeError("Memory allocation failed (bad allocation). The model is likely too large for your device's memory. Please try a smaller model (e.g. INT4 quantized), reduce max_new_tokens, or switch to a device with more memory.") from e
+            raise e
     else:
         try:
-            res = pipe.generate(prompt)
-        except Exception:
-            res = pipe.generate([prompt])
+            try:
+                res = pipe.generate(prompt)
+            except Exception:
+                res = pipe.generate([prompt])
+        except RuntimeError as e:
+            if "bad allocation" in str(e):
+                raise RuntimeError("Memory allocation failed (bad allocation). The model is likely too large for your device's memory. Please try a smaller model (e.g. INT4 quantized), reduce max_new_tokens, or switch to a device with more memory.") from e
+            raise e
     try:
         text = res.text if hasattr(res, "text") else (res[0] if isinstance(res, (list, tuple)) and len(res) > 0 else str(res))
     except Exception:
@@ -659,10 +681,25 @@ def generate_stream(pipe, prompt: str, config: dict, streamer):
             gen.repetition_penalty = float(config["repetition_penalty"])
         try:
             res = pipe.generate(prompt, gen, streamer=streamer)
+        except RuntimeError as e:
+            if "bad allocation" in str(e):
+                raise RuntimeError("Memory allocation failed (bad allocation).") from e
+            # If it's not bad allocation, maybe it's a config issue, try fallback
+            try:
+                res = pipe.generate(prompt, streamer=streamer)
+            except RuntimeError as e2:
+                if "bad allocation" in str(e2):
+                     raise RuntimeError("Memory allocation failed (bad allocation).") from e2
+                raise e2
         except Exception:
-            res = pipe.generate(prompt, streamer=streamer)
+             res = pipe.generate(prompt, streamer=streamer)
     else:
-        res = pipe.generate(prompt, streamer=streamer)
+        try:
+            res = pipe.generate(prompt, streamer=streamer)
+        except RuntimeError as e:
+            if "bad allocation" in str(e):
+                raise RuntimeError("Memory allocation failed (bad allocation).") from e
+            raise e
     try:
         text = res.text if hasattr(res, "text") else (res[0] if isinstance(res, (list, tuple)) and len(res)>0 else str(res))
     except Exception:
@@ -732,8 +769,8 @@ def quantize_model(model_dir: Path, save_dir: Path, mode: str = "int8", params: 
     from optimum.intel.openvino import OVModelForCausalLM
     from optimum.intel.openvino import OVWeightQuantizationConfig
     mmode = str(mode).lower()
-    if mmode != "int8":
-        raise ValueError("int4_disabled")
+    # if mmode != "int8":
+    #     raise ValueError("int4_disabled")
     src_dir = model_dir
     try:
         if not (src_dir / "openvino_model.xml").exists():
@@ -748,10 +785,21 @@ def quantize_model(model_dir: Path, save_dir: Path, mode: str = "int8", params: 
                     src_dir = model_dir
     except Exception:
         src_dir = model_dir
-    qc = OVWeightQuantizationConfig(bits=8)
+    
+    bits = 4 if mmode == "int4" else 8
+    # Use symmetric quantization for INT4 for better NPU compatibility if needed, 
+    # but standard OVWeightQuantizationConfig(bits=4) is safe.
+    qc = OVWeightQuantizationConfig(bits=bits)
+    
     m = OVModelForCausalLM.from_pretrained(str(src_dir), quantization_config=qc, trust_remote_code=True)
     save_dir.mkdir(parents=True, exist_ok=True)
     m.save_pretrained(str(save_dir))
+    
+    # Cleanup to ensure file handles are released for deletion
+    del m
+    import gc
+    gc.collect()
+
     try:
         xml = save_dir / "openvino_model.xml"
         binf = save_dir / "openvino_model.bin"
@@ -772,7 +820,7 @@ def quantize_model(model_dir: Path, save_dir: Path, mode: str = "int8", params: 
                 "--task", "text-generation-with-past",
                 "--library", "transformers",
                 "--trust-remote-code",
-                "--weight-format", "int8",
+                "--weight-format", mmode,
             ]
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     except Exception:

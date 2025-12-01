@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Funland</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logos/openvino-genai.svg">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
   <body>
@@ -14,6 +15,7 @@
       <nav class="nav">
         <a href="#chat" class="navlink" data-page="chat">聊天</a>
         <a href="#t2i" class="navlink" data-page="t2i">文生图</a>
+        <a href="#t2v" class="navlink" data-page="t2v">文生视频</a>
         <a href="#models" class="navlink" data-page="models">模型管理</a>
         <a href="#settings" class="navlink" data-page="settings">系统配置</a>
         <a href="#about" class="navlink" data-page="about">关于</a>
@@ -72,14 +74,6 @@
       </section>
       <section id="page_t2i" class="page">
         <section class="card">
-          <h2>预置模型推荐</h2>
-          <div class="row">
-            <select id="t2i_preset_select" class="grow" aria-label="Preset Models"></select>
-            <button id="btn_t2i_ms_fp16">ModelScope下载并转换FP16</button>
-            <button id="btn_t2i_ms_int8">ModelScope下载并转换INT8</button>
-          </div>
-        </section>
-        <section class="card">
           <h2>文本生成图片</h2>
           <div class="row">
             <input id="t2i_model_path" class="grow" placeholder="模型目录(已转换为OpenVINO)" aria-label="Model path">
@@ -112,28 +106,72 @@
           </div>
         </section>
       </section>
+      <section id="page_t2v" class="page">
+        <section class="card">
+          <h2>文本生成视频</h2>
+          <div class="row">
+            <input id="t2v_model_path" class="grow" placeholder="模型目录(已下载/已转换)" aria-label="T2V Model path">
+          </div>
+          <div class="row small">
+            <input id="t2v_seconds" type="number" value="4" min="1" step="1" aria-label="Seconds">
+            <input id="t2v_fps" type="number" value="8" min="1" step="1" aria-label="FPS">
+          </div>
+          <div class="row">
+            <textarea id="t2v_prompt" rows="3" placeholder="输入提示词" aria-label="T2V Prompt"></textarea>
+          </div>
+          <div class="row">
+            <button id="btn_t2v_generate" aria-label="Generate Video">生成视频</button>
+          </div>
+          <div class="row">
+            <div id="t2v_status"></div>
+          </div>
+          <div class="row">
+            <video id="t2v_video" controls style="display:none;max-width:100%;border-radius:8px"></video>
+          </div>
+        </section>
+      </section>
         <section id="page_models" class="page">
           <section class="card">
-            <h2>模型管理</h2>
-            <div class="row">
-              <input id="model_id" placeholder="modelscope id" class="grow" value="qwen/Qwen2.5-0.5B-Instruct">
-              <button id="btn_download">下载</button>
-              <button id="btn_dl_quant_int8">下载+INT8量化</button>
-            </div>
-            <div class="row small">
-              <input id="include" placeholder="include patterns">
-              <input id="exclude" placeholder="exclude patterns">
-              <input id="revision" placeholder="revision">
-            </div>
+            <h2>模型管理 (Model Management)</h2>
             
-            <div id="download_status"></div>
-          </section>
-          <section class="card">
-            <div class="row">
-              <button id="btn_quant_int8">INT8量化</button>
-              <button id="btn_release">释放模型</button>
+            <div class="tabs-row">
+                <button class="tab-btn active" data-target="tab_chat">对话模型 (Chat)</button>
+                <button class="tab-btn" data-target="tab_t2i">文生图 (T2I)</button>
+                <button class="tab-btn" data-target="tab_t2v">文生视频 (T2V)</button>
             </div>
-            <div class="list" id="model_list"></div>
+
+            <div id="tab_chat" class="tab-content active">
+                <div class="row">
+                    <select id="dl_chat_select" class="grow" aria-label="Chat Model"></select>
+                    <button id="btn_dl_chat" data-type="chat">下载 (Download)</button>
+                </div>
+                <p id="dl_chat_desc" class="desc-text"></p>
+                <div id="dl_status_chat"></div>
+            </div>
+
+            <div id="tab_t2i" class="tab-content" style="display:none">
+                <div class="row">
+                    <select id="dl_t2i_select" class="grow" aria-label="T2I Model"></select>
+                    <button id="btn_dl_t2i_fp16" data-type="t2i" data-prec="fp16">下载并转换 FP16</button>
+                    <button id="btn_dl_t2i_int8" data-type="t2i" data-prec="int8">下载并转换 INT8</button>
+                </div>
+                <p id="dl_t2i_desc" class="desc-text"></p>
+                <div id="dl_status_t2i"></div>
+            </div>
+
+            <div id="tab_t2v" class="tab-content" style="display:none">
+                <div class="row">
+                    <select id="dl_t2v_select" class="grow" aria-label="T2V Model"></select>
+                    <button id="btn_dl_t2v_fp16" data-type="t2v" data-prec="fp16">下载并转换 FP16</button>
+                    <button id="btn_dl_t2v_int8" data-type="t2v" data-prec="int8">下载并转换 INT8</button>
+                </div>
+                <p id="dl_t2v_desc" class="desc-text"></p>
+                <div id="dl_status_t2v"></div>
+            </div>
+
+            <div class="divider"></div>
+            <h3>已下载模型 (Local Models)</h3>
+            <div id="model_list"></div>
           </section>
         </section>
       <section id="page_settings" class="page">
@@ -226,7 +264,7 @@
         </section>
     </main>
     <footer class="foot">
-      <center><span>V0.1.0 Dev · 2025-11-24 · Powered by <a href="https://hellovm.com">HelloVM</a>  · <a href="https://github.com/hellovm/AI-Funland">Check on Github</a></span></center>
+      <center><span>V0.1.1 Dev · 2025-12-01 · Powered by <a href="https://hellovm.com">HelloVM</a>  · <a href="https://github.com/hellovm/AI-Funland">Check on Github</a></span></center>
     </footer>
   </div>
   <div id="loading_overlay" class="overlay hidden"><div class="box"><div class="spinner"></div><div id="loading_text">正在初始化模型，首次加载可能需要30-60秒</div><div id="loading_tip" style="display:none">模型加载中，请稍候...</div></div></div>

@@ -5,7 +5,7 @@
 <h2>Local Multi Function platform powered by OpenVINO, optimized for Intel Ultra NPU,supports Text Q&A and Text2Image, more features coming soon. | 基于 OpenVINO 的本地 AI 多能力平台，支持文本问答和文本生成图片，更多功能即将上线，针对 Intel Ultra 系列 NPU 优化。</h2>
 
 <p>
-📦 Version: <b>V0.1.0 Dev</b> · 🗓️ Release Date: <b>2025-11-24</b>
+📦 Version: <b>V0.1.1 Dev</b> · 🗓️ Release Date: <b>2025-12-01</b>
 </p>
 
 </div>
@@ -43,6 +43,18 @@
 - 更好的电池续航：在移动设备上以更低能耗完成推理，延长工作时长。
 
 适用场景示例：本地问答助手、快速摘要/检索增强生成（RAG）终端、移动办公与演示、教育与科研设备、需要合规/隐私保护的行业应用等。
+
+## Release Notes · V0.1.1 Dev（2025/12/01）
+
+- **API 健壮性增强 (API Robustness)**：
+  - 全面增强 API 参数校验：覆盖对话（Chat）、文生图（T2I）、文生视频（T2V）及模型下载接口 (Enhanced validation for Chat, T2I, T2V, and Download APIs)
+  - 严格的数值范围检查：如 `temperature` (0.0-2.0), `top_p` (0.0-1.0), `image_size` (256-2048), `steps` (1-100) 等 (Strict range checks for parameters)
+  - 精度参数校验：下载与转换接口强制检查 `fp16/int8` (Strict precision validation)
+- **后端架构优化 (Backend Refactoring)**：
+  - 移除全局环境变量依赖：重构 `inference.py`，使用 `inference_props` 传递 OpenVINO 配置，提升线程安全与多实例隔离性 (Refactored inference.py to remove global env vars; improved thread safety)
+  - 硬件检测缓存：为 `system.py` 中的硬件检测添加 `lru_cache`，减少冗余系统调用 (Added lru_cache for hardware detection)
+- **错误处理改进 (Error Handling)**：
+  - 统一 API 错误响应格式，提供更明确的错误信息与状态码 (Unified error response format)
 
 ## Release Notes · V0.1.0 Dev（2025/11/24）
 
@@ -143,17 +155,17 @@ Tips：如需自定义缓存目录，设置环境变量 `AIFUNLAND_CACHE_DIR`（
 - 入口与界面
 - 顶部导航选择 `文生图` 页面；卡片 `预置模型推荐` 下拉分组：
   - `已下载`：本地已存在的模型目录（`org__model` 或已转换的 `_ov_fp16/_ov_int8` 兼容项）
-  - `推荐下载`：常用 Stable Diffusion 模型清单（如 `stabilityai/stable-diffusion-2-1`、`runwayml/stable-diffusion-v1-5` 等）
+  - `推荐下载`：常用 Stable Diffusion 模型清单（如 `Comfy-Org/stable_diffusion_2.1_repackaged`、`runwayml/stable-diffusion-v1-5` 等）
 - 下载与转换
 - 选择“推荐下载”中的模型后，点击 `ModelScope下载并转换FP16` 或 `ModelScope下载并转换INT8`，系统将自动下载并使用 Optimum-Intel(OpenVINO) 进行转换；任务完成后下拉列表自动刷新，并将模型路径填入输入框。
 - 生成参数与设备
 - 在 `文本生成图片` 卡片中设置 `宽度/高度/步数/Guidance`；可为 `TextEncoder/UNet/VAE` 分别选择设备（如 `CPU/GPU/NPU`）；点击 `生成图片` 后在下方展示生成结果与状态信息。
 - 推荐模型（T2I）
-- `stabilityai/stable-diffusion-2-1` · 通用质量好；
+- `Comfy-Org/stable_diffusion_2.1_repackaged` · SD 2.1 重打包；
 - `runwayml/stable-diffusion-v1-5` · 1.5 经典版本；
 - `dreamlike-art/dreamlike-anime-1.0` · 动漫风格；
 - 注意事项
-- 模型目录选择：无需手动指向 `_ov_fp16/_ov_int8` 子目录，选择原始目录（如 `sd__stabilityai__stable-diffusion-2-1`）即可；系统会自动兼容结构并避免 `model_index.json` 缺失问题。
+- 模型目录选择：请选择转换后的目录（`*_ov_fp16` 或 `*_ov_int8`），生成更稳健；若误选原始目录，后端会尝试自动定位同名的已转换目录或常见子目录以避免 `model_index.json` 缺失。
 - 若“已下载”为空，将显示“推荐下载”分组以便一键获取；下载完成后自动填充路径。
 - 首次生成可能较慢，页面顶部横幅与居中遮罩会显示“系统初始化中，请稍候…”。
 - 相关 API
